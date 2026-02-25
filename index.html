@@ -335,7 +335,23 @@
             <div class="nav-dot"></div>
         </div>
         <div class="nav-dot-container" onclick="scrollToSection(3)">
-            <span class="nav-label">Team</span>
+            <span class="nav-label">PD</span>
+            <div class="nav-dot"></div>
+        </div>
+        <div class="nav-dot-container" onclick="scrollToSection(4)">
+            <span class="nav-label">Material</span>
+            <div class="nav-dot"></div>
+        </div>
+        <div class="nav-dot-container" onclick="scrollToSection(5)">
+            <span class="nav-label">H&H</span>
+            <div class="nav-dot"></div>
+        </div>
+        <div class="nav-dot-container" onclick="scrollToSection(6)">
+            <span class="nav-label">A&A</span>
+            <div class="nav-dot"></div>
+        </div>
+        <div class="nav-dot-container" onclick="scrollToSection(7)">
+            <span class="nav-label">SEM</span>
             <div class="nav-dot"></div>
         </div>
     </div>
@@ -412,6 +428,10 @@
         <section id="section-1"></section>
         <section id="section-2"></section>
         <section id="section-3"></section>
+        <section id="section-4"></section>
+        <section id="section-5"></section>
+        <section id="section-6"></section>
+        <section id="section-7"></section>
     </div>
 
     <script>
@@ -555,68 +575,83 @@
             const maxScroll = scrollWrapper.scrollHeight - window.innerHeight;
             const scrollPercent = currentScrollY / maxScroll;
 
-            // 4-Phase Animation Mapping
-            // 0.00 - 0.25: Section 0 (Intro -> Branding Z=10)
-            // 0.25 - 0.50: Section 1 (Branding Hold Z=10)
-            // 0.50 - 0.75: Section 2 (Zoom Out to Z=120 + Labels)
-            // 0.75 - 1.00: Section 3 (Zoom In to PD Node Z=15)
+            // 8-Phase Animation Mapping (12.5% each)
+            // 0: Intro (0.00 - 0.125)
+            // 1: Branding Hold (0.125 - 0.250)
+            // 2: Impact Labels (0.250 - 0.375)
+            // 3: PD Detail (0.375 - 0.500)
+            // 4: Material Detail (0.500 - 0.625)
+            // 5: H&H Detail (0.625 - 0.750)
+            // 6: A&A Detail (0.750 - 0.875)
+            // 7: SEM Detail (0.875 - 1.00)
 
             let currentZ, currentScale, activeRotation;
             const cameraTarget = new THREE.Vector3(0, 0, 0);
+            const phase = 0.125;
 
-            if (scrollPercent <= 0.25) {
-                const t = scrollPercent / 0.25;
+            if (scrollPercent <= phase) {
+                const t = scrollPercent / phase;
                 currentZ = 250 - Math.pow(t, 2) * 240; // 250 -> 10
                 currentScale = 1 + Math.pow(t, 2) * 3.5;
                 activeRotation = 0.001 + t * 0.04;
-            } else if (scrollPercent <= 0.50) {
+            } else if (scrollPercent <= phase * 2) {
                 currentZ = 10;
                 currentScale = 4.5;
                 activeRotation = 0.041;
-            } else if (scrollPercent <= 0.75) {
-                const t = (scrollPercent - 0.50) / 0.25;
-                // Reach Z=120 quickly (by 60% scroll) and stabilize
+            } else if (scrollPercent <= phase * 3) {
+                const t = (scrollPercent - phase * 2) / phase;
                 const tZoom = Math.min(1, t / 0.4);
                 currentZ = 10 + tZoom * 110; // 10 -> 120
                 currentScale = 4.5 - tZoom * 1.8;
                 activeRotation = 0.041;
             } else {
-                const t = (scrollPercent - 0.75) / 0.25;
-                const easedT = 1 - Math.pow(1 - t, 3); // Cubic Out for smooth arrival
+                // Determine which department we are zooming into (Phases 3 to 7)
+                const deptIndex = Math.floor((scrollPercent - phase * 3) / phase);
+                const clampedDeptIndex = Math.min(4, Math.max(0, deptIndex));
+                const tDept = ((scrollPercent - phase * 3) % phase) / phase;
 
-                // Target Zoom into PD (Start from stable Z=120)
+                const easedT = 1 - Math.pow(1 - tDept, 3); // Cubic Out 
+
+                // Pull back slightly between transitions if tDept is low or high
+                // For simplicity, we just zoom into the current active dept node
                 currentZ = 120 - easedT * 115; // 120 -> 5
-                currentScale = 2.7 - easedT * 0.4; // Slightly tighter scale transition
-                activeRotation = 0.041 * (1 - easedT * 0.9); // Nearly stop rotation at center
+                currentScale = 2.7 - easedT * 0.4;
+                activeRotation = 0.041 * (1 - easedT * 0.9);
 
-                const pdNode = deps[0];
-                const pdPos = pdNode.pos.clone().applyEuler(particleSystem.rotation);
-                cameraTarget.lerp(pdPos, easedT * 0.98); // Lock focus on PD point
+                const targetNode = deps[clampedDeptIndex];
+                const nodePos = targetNode.pos.clone().applyEuler(particleSystem.rotation);
+                cameraTarget.lerp(nodePos, easedT * 0.98);
+
+                // Update Mini-Sphere and Team Overlay based on clampedDeptIndex
+                updateOverlayContent(clampedDeptIndex);
             }
 
             camera.position.z = currentZ;
-            camera.lookAt(cameraTarget);
             particleSystem.scale.set(currentScale, currentScale, currentScale);
+            camera.lookAt(cameraTarget);
 
-            // 5. Background Fade Logic (Hide particles in Section 4)
+            // 5. Background Fade Logic (Hide particles in Section 4+)
             const canvasContainer = document.getElementById('canvas-container');
             const miniContainer = document.getElementById('mini-sphere-container');
-            if (scrollPercent > 0.75) {
-                const tFade = (scrollPercent - 0.75) / 0.15; // Fade out by 90% scroll
-                canvasContainer.style.opacity = Math.max(0, 1 - tFade);
+            const impactStart = phase * 3; // Section 3 (PD) starts here
 
-                // Background becomes black, mini-sphere appears
-                miniContainer.style.opacity = Math.min(1, (scrollPercent - 0.85) / 0.1);
+            if (scrollPercent > impactStart) {
+                const tFade = (scrollPercent - impactStart) / (phase * 0.6);
+                canvasContainer.style.opacity = Math.max(0, 1 - tFade);
+                miniContainer.style.opacity = 1;
+            } else if (scrollPercent > phase * 2.5) { // Fade out during Impact to Zoom transition
+                canvasContainer.style.opacity = 1;
+                miniContainer.style.opacity = 0;
             } else {
                 canvasContainer.style.opacity = 1;
                 miniContainer.style.opacity = 0;
             }
 
             // Update Mini-Sphere
-            updateMiniSphere();
+            updateMiniSphere(Math.floor((scrollPercent - phase * 3) / phase));
 
             // Branding Text Logic
-            if (scrollPercent > 0.2 && scrollPercent < 0.55) {
+            if (scrollPercent > phase * 0.8 && scrollPercent < phase * 2.2) {
                 textBox.style.opacity = 1;
                 textBox.style.transform = "translate(-50%, -50%) scale(1)";
             } else {
@@ -626,21 +661,22 @@
 
             // Team Overlay Logic
             const teamOverlay = document.getElementById('team-overlay');
-            if (scrollPercent > 0.9) {
+            if (scrollPercent > phase * 3.2) {
                 teamOverlay.classList.add('active');
             } else {
                 teamOverlay.classList.remove('active');
+                lastDeptIndex = -1; // Reset to allow re-triggering
             }
 
             // Side Nav Update
-            const activeIndex = Math.min(3, Math.floor(scrollPercent * 3.99));
+            const activeIndex = Math.min(7, Math.floor(scrollPercent * 7.99));
             navDots.forEach((dot, idx) => {
                 if (idx === activeIndex) dot.classList.add('active');
                 else dot.classList.remove('active');
             });
 
-            // Department Labels Projection & Macro Scaling
-            const showLabels = scrollPercent > 0.55;
+            // Department Labels Projection
+            const showLabels = scrollPercent > phase * 2 && scrollPercent < phase * 3.5;
             deps.forEach((d, idx) => {
                 if (showLabels) {
                     const vec = d.pos.clone().applyEuler(particleSystem.rotation);
@@ -651,21 +687,21 @@
                     d.element.style.left = `${x}px`;
                     d.element.style.top = `${y}px`;
 
-                    // Specific Logic for PD Label during Section 4 Zoom
-                    if (idx === 0 && scrollPercent > 0.75) {
-                        const tZoom = (scrollPercent - 0.75) / 0.25;
-                        const labelScale = 1 + tZoom * 15; // Grow even larger!
-                        // Accelerated fadeout: gone by tZoom = 0.6
+                    // Zoom scaling for the PRIMARY active label
+                    const activeZoomPhase = 3 + idx;
+                    const phaseStart = activeZoomPhase * phase;
+                    const phaseEnd = (activeZoomPhase + 1) * phase;
+
+                    if (scrollPercent >= phaseStart && scrollPercent < phaseEnd) {
+                        const tZoom = (scrollPercent - phaseStart) / phase;
+                        const labelScale = 1 + tZoom * 15;
                         const labelOpacity = Math.max(0, 1 - (tZoom / 0.6));
                         d.element.style.transform = `translate(-50%, -50%) scale(${labelScale})`;
                         d.element.style.opacity = labelOpacity;
-                    } else if (scrollPercent <= 0.82) {
+                    } else {
                         d.element.style.opacity = 1;
                         d.element.style.transform = "translate(-50%, -50%) scale(1)";
-                    } else {
-                        d.element.style.opacity = 0;
                     }
-
                     d.element.style.zIndex = vec.z < 0 ? 60 : 40;
                 } else {
                     d.element.style.opacity = 0;
@@ -681,6 +717,75 @@
             particleSystem.rotation.x += 0.05 * (mouseY - particleSystem.rotation.x);
 
             renderer.render(scene, camera);
+        }
+
+        // --- Dynamic Content Logic ---
+        const teamData = [
+            {
+                dept: "PD",
+                members: [
+                    { name: "Anshuman", role: "Market Researcher", initial: "A" },
+                    { name: "Omkar", role: "Product Designer", initial: "O" },
+                    { name: "Spruha", role: "Product Designer", initial: "S" }
+                ]
+            },
+            {
+                dept: "Material",
+                members: [
+                    { name: "Michael", role: "Material Specialist", initial: "M" },
+                    { name: "Elena", role: "Sustainability Lead", initial: "E" },
+                    { name: "David", role: "Process Engineer", initial: "D" }
+                ]
+            },
+            {
+                dept: "H&H",
+                members: [
+                    { name: "Sarah", role: "UX Researcher", initial: "S" },
+                    { name: "James", role: "Industrial Designer", initial: "J" },
+                    { name: "Lisa", role: "Product Manager", initial: "L" }
+                ]
+            },
+            {
+                dept: "A&A",
+                members: [
+                    { name: "Alex", role: "Visual Designer", initial: "A" },
+                    { name: "Ryan", role: "Creative Director", initial: "R" },
+                    { name: "Chloe", role: "Content Strategist", initial: "C" }
+                ]
+            },
+            {
+                dept: "SEM",
+                members: [
+                    { name: "Tom", role: "Marketing Analyst", initial: "T" },
+                    { name: "Jessica", role: "SEO Specialist", initial: "J" },
+                    { name: "Kevin", role: "Growth Lead", initial: "K" }
+                ]
+            }
+        ];
+
+        let lastDeptIndex = -1;
+        function updateOverlayContent(index) {
+            const clampedIndex = Math.min(4, Math.max(0, index));
+            if (clampedIndex === lastDeptIndex) return;
+            lastDeptIndex = clampedIndex;
+
+            const data = teamData[clampedIndex];
+            const overlay = document.getElementById('team-overlay');
+            overlay.innerHTML = ''; // Clear
+
+            data.members.forEach((m, i) => {
+                const card = document.createElement('div');
+                card.className = 'team-card';
+                card.style.transitionDelay = `${0.1 + i * 0.1}s`;
+                card.innerHTML = `
+                    <div class="member-avatar">${m.initial}</div>
+                    <div class="member-info">
+                        <span class="member-name">${m.name}</span>
+                        <span class="member-role">${m.role}</span>
+                    </div>
+                `;
+                overlay.appendChild(card);
+            });
         }
 
         // --- Mini-Sphere Logic ---
@@ -737,7 +842,10 @@
 
         const miniPDNode = { pos: new THREE.Vector3(0, 0, 85), element: document.getElementById('mini-label-pd') };
 
-        function updateMiniSphere() {
+        function updateMiniSphere(index) {
+            const clampedIndex = Math.min(4, Math.max(0, index));
+            miniPDNode.element.innerText = teamData[clampedIndex].dept;
+
             miniSystem.rotation.y += 0.008; // Slightly faster
             miniSystem.rotation.x += 0.003;
 
