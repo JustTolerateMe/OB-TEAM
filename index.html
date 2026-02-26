@@ -545,7 +545,32 @@
 
     <!-- Impact Slide Overlay -->
     <div id="impact-slide" class="content-slide">
-        <div class="impact-content">
+        <!-- Background Newton's Cradle -->
+        <div class="cradle-container" id="newtons-cradle"
+            style="position: absolute; top: 0; left: 0; width: 100vw; height: 100vh; z-index: -1; opacity: 0; transition: opacity 1s ease; pointer-events: none; display: flex; justify-content: center; align-items: flex-start;">
+            <svg width="900" height="700" viewBox="0 0 900 700" preserveAspectRatio="xMidYMin meet"
+                style="width: 100%; height: 100%; max-height: 80vh;">
+                <defs>
+                    <radialGradient id="metalBall" cx="35%" cy="30%" r="65%">
+                        <stop offset="0%" stop-color="hsl(220, 8%, 65%)" />
+                        <stop offset="50%" stop-color="hsl(220, 8%, 40%)" />
+                        <stop offset="100%" stop-color="hsl(220, 8%, 20%)" />
+                    </radialGradient>
+                    <radialGradient id="redBall" cx="35%" cy="30%" r="65%">
+                        <stop offset="0%" stop-color="hsl(0, 80%, 65%)" />
+                        <stop offset="50%" stop-color="hsl(0, 75%, 50%)" />
+                        <stop offset="100%" stop-color="hsl(0, 70%, 30%)" />
+                    </radialGradient>
+                    <filter id="ballShadow">
+                        <feDropShadow dx="3" dy="6" stdDeviation="4" flood-color="hsl(220,10%,10%)"
+                            flood-opacity="0.3" />
+                    </filter>
+                </defs>
+                <rect x="208" y="-10" width="484" height="8" rx="4" fill="hsl(220, 10%, 68%)" />
+                <g id="cradle-balls"></g>
+            </svg>
+        </div>
+        <div class="impact-content" style="position: relative; top: -120px;">
             <h1 style="color: var(--red); font-size: 3rem; margin-bottom: 0;">Our Impact</h1>
             <h3 style="color: #ccc; font-weight: 300; margin-top: 5px;">Across multiple teams</h3>
             <p style="color: var(--red); font-size: 1.5rem; max-width: 600px; margin-top: 40px; line-height: 1.4;">
@@ -953,8 +978,26 @@
             const partnershipsSlide = document.getElementById('partnerships-slide');
 
             // Text Slides Visibility Constraints
-            if (scrollIndex >= 7.5 && scrollIndex < 8.5) impactSlide.classList.add('active');
-            else impactSlide.classList.remove('active');
+            const cradleContainer = document.getElementById('newtons-cradle');
+            if (scrollIndex >= 7.5 && scrollIndex < 8.5) {
+                impactSlide.classList.add('active');
+                if (!cradleState.active) {
+                    cradleState.active = true;
+                    if (!cradleState.started) {
+                        cradleState.angles[0] = -0.6;
+                        cradleState.velocities.fill(0);
+                        cradleState.started = true;
+                    }
+                    cradleContainer.style.opacity = 0.6;
+                }
+                updateCradlePhysics();
+            } else {
+                impactSlide.classList.remove('active');
+                if (cradleState.active) {
+                    cradleState.active = false;
+                    cradleContainer.style.opacity = 0;
+                }
+            }
 
             if (scrollIndex >= 8.5 && scrollIndex < 9.5) digitalTwinSlide.classList.add('active');
             else digitalTwinSlide.classList.remove('active');
@@ -1127,6 +1170,99 @@
         }
 
 
+
+        // --- Newton's Cradle Physics Engine ---
+        const BALL_COUNT = 5;
+        const BALL_RADIUS = 90;
+        const STRING_LENGTH = 610;
+        const BALL_GAP = BALL_RADIUS * 2 + 6;
+        const GRAVITY = 9.81;
+        const DAMPING = 1.0;
+        const TRANSFER_EFFICIENCY = 1.0;
+        const DT = 0.03;
+
+        const cradleState = {
+            angles: Array(BALL_COUNT).fill(0),
+            velocities: Array(BALL_COUNT).fill(0),
+            started: false,
+            active: false
+        };
+
+        const cradleGroup = document.getElementById('cradle-balls');
+        const cradleElements = [];
+        const svgWidth = 900;
+        const centerX = svgWidth / 2;
+        const topY = -10;
+
+        // Initialize SVG elements dynamically
+        for (let i = 0; i < BALL_COUNT; i++) {
+            const pivotX = centerX + (i - (BALL_COUNT - 1) / 2) * BALL_GAP;
+            const pivotY = topY + 4;
+
+            const g = document.createElementNS("http://www.w3.org/2000/svg", "g");
+            g.setAttribute("filter", "url(#ballShadow)");
+
+            const line = document.createElementNS("http://www.w3.org/2000/svg", "line");
+            line.setAttribute("x1", pivotX); line.setAttribute("y1", pivotY);
+            line.setAttribute("stroke", "hsl(220, 10%, 70%)"); line.setAttribute("stroke-width", "2.5");
+            g.appendChild(line);
+
+
+
+            const circle = document.createElementNS("http://www.w3.org/2000/svg", "circle");
+            circle.setAttribute("r", BALL_RADIUS); circle.setAttribute("fill", "url(#metalBall)");
+            g.appendChild(circle);
+
+            const ellipse = document.createElementNS("http://www.w3.org/2000/svg", "ellipse");
+            ellipse.setAttribute("rx", BALL_RADIUS * 0.22); ellipse.setAttribute("ry", BALL_RADIUS * 0.15);
+            ellipse.setAttribute("fill", "white"); ellipse.setAttribute("opacity", "0.35");
+            g.appendChild(ellipse);
+
+            cradleGroup.appendChild(g);
+            cradleElements.push({ pivotX, pivotY, line, circle, ellipse, isFirst: i === 0, isLast: i === BALL_COUNT - 1 });
+        }
+
+        function updateCradlePhysics() {
+            if (!cradleState.active) return;
+            const s = cradleState;
+
+            for (let i = 0; i < BALL_COUNT; i++) {
+                const acc = -(GRAVITY / (STRING_LENGTH * 0.05)) * Math.sin(s.angles[i]);
+                s.velocities[i] += acc * DT;
+                s.velocities[i] *= DAMPING;
+                s.angles[i] += s.velocities[i] * DT;
+            }
+            for (let i = 0; i < BALL_COUNT - 1; i++) {
+                const x1 = Math.sin(s.angles[i]);
+                const x2 = Math.sin(s.angles[i + 1]);
+                const gap = BALL_GAP / STRING_LENGTH;
+                if (x1 - x2 > gap * 0.01) {
+                    const v1 = s.velocities[i];
+                    const v2 = s.velocities[i + 1];
+                    s.velocities[i] = v2 * TRANSFER_EFFICIENCY;
+                    s.velocities[i + 1] = v1 * TRANSFER_EFFICIENCY;
+                    const overlap = (x1 - x2 - gap * 0.01) / 2;
+                    s.angles[i] -= overlap * 0.5;
+                    s.angles[i + 1] += overlap * 0.5;
+                }
+            }
+
+            for (let i = 0; i < BALL_COUNT; i++) {
+                const angle = s.angles[i];
+                const el = cradleElements[i];
+                const ballX = el.pivotX + Math.sin(angle) * STRING_LENGTH;
+                const ballY = el.pivotY + Math.cos(angle) * STRING_LENGTH;
+
+                el.line.setAttribute("x2", ballX); el.line.setAttribute("y2", ballY);
+                el.circle.setAttribute("cx", ballX); el.circle.setAttribute("cy", ballY);
+                el.ellipse.setAttribute("cx", ballX - BALL_RADIUS * 0.2); el.ellipse.setAttribute("cy", ballY - BALL_RADIUS * 0.25);
+
+                const isMoving = Math.abs(angle) > 0.02;
+                if (el.isFirst || el.isLast) {
+                    el.circle.setAttribute("fill", isMoving ? "url(#redBall)" : "url(#metalBall)");
+                }
+            }
+        }
 
         animate();
     </script>
