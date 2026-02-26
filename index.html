@@ -677,7 +677,7 @@
         document.getElementById('canvas-container').appendChild(renderer.domElement);
 
         // 4. Particle System Generation
-        const particleCount = 65000; // Massively increased for dense outer ring
+        const particleCount = 72000; // Massively increased for dense outer ring
         const geometry = new THREE.BufferGeometry();
         const positions = new Float32Array(particleCount * 3);
         const colors = new Float32Array(particleCount * 3);
@@ -688,8 +688,8 @@
 
         for (let i = 0; i < particleCount; i++) {
             let r, baseColor, type;
-            // Target Bullseye Logic: Fixed 10000 Core, Remaining Outer Ring (Extremely Dense)
-            if (i < 10000) {
+            // Target Bullseye Logic: Fixed 7000 Core, Remaining Outer Ring (Extremely Dense)
+            if (i < 7000) {
                 // Sparser, slightly wider core (radius 12 to 25)
                 r = 12 + Math.random() * 13;
                 baseColor = colorRed;
